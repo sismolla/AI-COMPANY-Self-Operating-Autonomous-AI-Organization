@@ -93,6 +93,34 @@ async def run_build_tool_cmd(name: str, description: str):
         print(f"[FAILED] Tool build failed: {res.get('error')}")
 
 
+async def run_reset_cmd():
+    """Reset database and workspace to clean initial seed state."""
+    import shutil
+    from pathlib import Path
+    from director.ceo import ceo
+
+    # 1. Clear database file
+    db_path = settings.DB_PATH
+    if db_path.exists():
+        db_path.unlink()
+    for wal in settings.DATA_DIR.glob("company.db*"):
+        wal.unlink(missing_ok=True)
+
+    # 2. Clean workspaces
+    for ws_dir in settings.WORKSPACE_DIR.iterdir():
+        if ws_dir.is_dir():
+            for f in ws_dir.glob("*"):
+                if f.is_file():
+                    f.unlink()
+                elif f.is_dir():
+                    shutil.rmtree(f, ignore_errors=True)
+
+    # 3. Re-initialize cleanly
+    ceo.is_initialized = False
+    await ceo.initialize()
+    print("\n[SUCCESS] System reset to clean initial state. All test data removed.\n")
+
+
 def run_server():
     """Launch FastAPI dashboard and autonomous background loop."""
     import uvicorn
@@ -128,6 +156,9 @@ def main():
     tool_parser.add_argument("name", help="Tool name")
     tool_parser.add_argument("description", help="Tool purpose and description")
 
+    # Reset command
+    subparsers.add_parser("reset", help="Reset database and workspaces to fresh initial seed state")
+
     args = parser.parse_args()
 
     if args.command == "start" or args.command is None:
@@ -136,6 +167,8 @@ def main():
         asyncio.run(run_cycle_cmd())
     elif args.command == "status":
         asyncio.run(run_status_cmd())
+    elif args.command == "reset":
+        asyncio.run(run_reset_cmd())
     elif args.command == "objective":
         asyncio.run(run_objective_cmd(args.title, args.description))
     elif args.command == "build-tool":
