@@ -1,0 +1,73 @@
+# Security and Permission Policy Configuration
+
+levels:
+  level_1:
+    name: "Read & Research"
+    description: "Read files, analyze data, perform market and web research, compute stats."
+    allowed_actions:
+      - "read_file"
+      - "list_directory"
+      - "search_data"
+      - "fetch_web_content"
+      - "query_memory"
+      - "compute_metrics"
+    requires_approval: false
+
+  level_2:
+    name: "Internal Creation & Sandboxing"
+    description: "Write files in agent workspace, build code, run sandbox tests, register internal tools."
+    allowed_actions:
+      - "write_workspace_file"
+      - "edit_workspace_file"
+      - "execute_sandbox_test"
+      - "generate_tool_draft"
+      - "save_memory"
+      - "delegate_internal_task"
+    requires_approval: false
+
+  level_3:
+    name: "Controlled External Actions"
+    description: "Execute approved external browser operations, stage external API calls, post drafts to social queue."
+    allowed_actions:
+      - "browser_navigate"
+      - "browser_screenshot"
+      - "api_webhook_post"
+      - "queue_social_post"
+      - "deploy_approved_tool"
+    requires_approval: true
+    approved_by: "director"  # Director can approve eligible Level 3 actions
+
+  level_4:
+    name: "Critical & Irreversible Actions"
+    description: "Financial transactions, publishing live to production social accounts, credential updates, deleting company databases."
+    allowed_actions:
+      - "financial_transfer"
+      - "publish_live_external"
+      - "modify_security_policy"
+      - "revoke_credentials"
+      - "purge_database"
+    requires_approval: true
+    approved_by: "owner"  # Strictly Owner-only approval required
+
+agent_default_permissions:
+  director:
+    max_level: 3
+    can_grant_level: 3
+  engineering:
+    max_level: 2
+    can_grant_level: 1
+  research:
+    max_level: 1
+    can_grant_level: 1
+  marketing:
+    max_level: 2
+    can_grant_level: 1
+  analytics:
+    max_level: 2
+    can_grant_level: 1
+  operations:
+    max_level: 2
+    can_grant_level: 1
+  quality:
+    max_level: 2
+    can_grant_level: 1
