@@ -1,5 +1,6 @@
 """Specialized Analytics & Performance Autonomous Agent."""
 
+import json
 import logging
 from typing import Dict, Any
 from agents.base import BaseAgent
@@ -30,6 +31,8 @@ class AnalyticsAgent(BaseAgent):
         result["agent_scorecards"] = scorecards
 
         # Save analytics report to workspace
+        artifacts_val = result.get("artifacts", {})
+        artifacts_str = json.dumps(artifacts_val, indent=2) if isinstance(artifacts_val, (dict, list)) else str(artifacts_val)
         report_fn = f"analytics_report_{task.get('id', 'latest')}.md"
         report_md = (
             f"# Performance & Analytics Report: {task.get('title')}\n\n"
@@ -38,11 +41,13 @@ class AnalyticsAgent(BaseAgent):
             f"- Success Rate: {telemetry['tasks_completed']}/{telemetry['total_tasks_processed']}\n"
             f"- Active Tools: {telemetry['active_approved_tools']}\n"
             f"- Strategic Progress: {telemetry['average_objective_progress']}%\n\n"
-            f"## Executive Summary\n{result.get('summary', '')}\n"
+            f"## Executive Summary\n{result.get('summary', '')}\n\n"
+            f"## Strategic Projections & Unit Economics\n```json\n{artifacts_str}\n```\n"
         )
         try:
             self.write_workspace_file(report_fn, report_md)
             result["saved_report"] = report_fn
+            result["saved_file"] = report_fn
         except Exception as e:
             logger.warning(f"Could not save analytics report: {e}")
 

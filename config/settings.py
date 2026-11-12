@@ -8,6 +8,13 @@ from pydantic import BaseModel, Field
 # Base root directory of the project
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Load environment variables from .env
+try:
+    from dotenv import load_dotenv
+    load_dotenv(BASE_DIR / ".env", override=True)
+except Exception:
+    pass
+
 class Settings(BaseModel):
     """Application settings with environment variable overrides."""
     
@@ -38,7 +45,7 @@ class Settings(BaseModel):
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o")
 
     GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY", None)
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 
     ANTHROPIC_API_KEY: Optional[str] = os.getenv("ANTHROPIC_API_KEY", None)
     ANTHROPIC_MODEL: str = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022")
@@ -60,6 +67,17 @@ class Settings(BaseModel):
     SCHEDULER_INTERVAL_SECONDS: int = int(os.getenv("SCHEDULER_INTERVAL_SECONDS", "10"))
     AUTONOMOUS_CYCLE_INTERVAL_SECONDS: int = int(os.getenv("AUTONOMOUS_CYCLE_INTERVAL_SECONDS", "15"))
     AUTO_CYCLE_ENABLED: bool = os.getenv("AUTO_CYCLE_ENABLED", "true").lower() in ("true", "1", "yes")
+
+    # Multi-Platform Operations (Telegram, LinkedIn, Facebook)
+    TELEGRAM_BOT_TOKEN: Optional[str] = os.getenv("TELEGRAM_BOT_TOKEN", None)
+    TELEGRAM_CHANNEL_ID: Optional[str] = os.getenv("TELEGRAM_CHANNEL_ID", None)
+    TELEGRAM_GROUP_ID: Optional[str] = os.getenv("TELEGRAM_GROUP_ID", None)
+
+    LINKEDIN_ACCESS_TOKEN: Optional[str] = os.getenv("LINKEDIN_ACCESS_TOKEN", None)
+    LINKEDIN_AUTHOR_URN: Optional[str] = os.getenv("LINKEDIN_AUTHOR_URN", None)
+
+    FACEBOOK_PAGE_ACCESS_TOKEN: Optional[str] = os.getenv("FACEBOOK_PAGE_ACCESS_TOKEN", None)
+    FACEBOOK_PAGE_ID: Optional[str] = os.getenv("FACEBOOK_PAGE_ID", None)
 
     def ensure_directories(self) -> None:
         """Create necessary data, tools, and workspace directories."""

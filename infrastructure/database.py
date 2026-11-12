@@ -84,6 +84,8 @@ class Database:
                 error TEXT,
                 retry_count INTEGER NOT NULL DEFAULT 0,
                 max_retries INTEGER NOT NULL DEFAULT 3,
+                parent_task_id TEXT,
+                delegation_depth INTEGER NOT NULL DEFAULT 0,
                 scheduled_at TEXT,
                 created_at TEXT NOT NULL,
                 started_at TEXT,
@@ -171,6 +173,20 @@ class Database:
                 created_at TEXT NOT NULL
             );
             """,
+            """
+            CREATE TABLE IF NOT EXISTS staged_posts (
+                id TEXT PRIMARY KEY,
+                platform TEXT NOT NULL,
+                content TEXT NOT NULL,
+                author_agent TEXT NOT NULL DEFAULT 'marketing',
+                status TEXT NOT NULL DEFAULT 'pending_approval',
+                metadata_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL,
+                published_at TEXT,
+                approved_by TEXT
+            );
+            """,
+            "CREATE INDEX IF NOT EXISTS idx_staged_posts_status ON staged_posts(status);",
             "CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);",
             "CREATE INDEX IF NOT EXISTS idx_tasks_agent ON tasks(owner_agent);",
             "CREATE INDEX IF NOT EXISTS idx_memory_agent ON agent_memory(agent_name, memory_type);",
@@ -179,6 +195,21 @@ class Database:
         ]
         for q in queries:
             await self.execute(q)
+
+        # Schema migrations for existing databases
+        await self._run_migrations()
+
+    async def _run_migrations(self) -> None:
+        """Safely add new columns to existing SQLite tables if missing."""
+        migration_queries = [
+            "ALTER TABLE tasks ADD COLUMN parent_task_id TEXT;",
+            "ALTER TABLE tasks ADD COLUMN delegation_depth INTEGER NOT NULL DEFAULT 0;"
+        ]
+        for mig in migration_queries:
+            try:
+                await self.execute(mig)
+            except Exception:
+                pass  # Column already exists
 
     # --- Objectives ---
     async def create_objective(self, obj: Dict[str, Any]) -> None:
@@ -232,8 +263,8 @@ class Database:
             """
             INSERT INTO tasks 
             (id, objective_id, owner_agent, title, description, status, priority, permission_level, 
-             inputs_json, outputs_json, error, retry_count, max_retries, scheduled_at, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             inputs_json, outputs_json, error, retry_count, max_retries, parent_task_id, delegation_depth, scheduled_at, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 task["id"],
@@ -249,6 +280,8 @@ class Database:
                 task.get("error"),
                 task.get("retry_count", 0),
                 task.get("max_retries", settings.MAX_RETRIES),
+                task.get("parent_task_id"),
+                task.get("delegation_depth", 0),
                 task.get("scheduled_at"),
                 task.get("created_at", now)
             )
@@ -429,6 +462,62 @@ class Database:
             GROUP BY agent_name, metric_name
             """
         )
+
+    # --- Staged Social Posts ---
+    async def save_staged_post(self, post_data: Dict[str, Any]) -> None:
+        now = datetime.utcnow().isoformat()
+        await self.execute(
+            """
+            INSERT INTO staged_posts 
+            (id, platform, content, author_agent, status, metadata_json, created_at, published_at, approved_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                status = excluded.status,
+                published_at = excluded.published_at,
+                approved_by = excluded.approved_by,
+                metadata_json = excluded.metadata_json
+            """,
+            (
+                post_data["id"],
+                post_data["platform"],
+                post_data["content"],
+                post_data.get("author_agent", "marketing"),
+                post_data.get("status", "pending_approval"),
+                json.dumps(post_data.get("metadata", {})),
+                post_data.get("created_at", now),
+                post_data.get("published_at"),
+                post_data.get("approved_by")
+            )
+        )
+
+    async def get_staged_posts(self, status: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
+        if status:
+            rows = await self.fetch_all(
+                "SELECT * FROM staged_posts WHERE status = ? ORDER BY created_at DESC LIMIT ?",
+                (status, limit)
+            )
+        else:
+            rows = await self.fetch_all(
+                "SELECT * FROM staged_posts ORDER BY created_at DESC LIMIT ?",
+                (limit,)
+            )
+        for r in rows:
+            r["metadata"] = json.loads(r["metadata_json"])
+        return rows
+
+    async def update_staged_post(self, post_id: str, **kwargs) -> None:
+        fields = []
+        values = []
+        for k, v in kwargs.items():
+            if k == "metadata":
+                fields.append("metadata_json = ?")
+                values.append(json.dumps(v))
+            else:
+                fields.append(f"{k} = ?")
+                values.append(v)
+        values.append(post_id)
+        query = f"UPDATE staged_posts SET {', '.join(fields)} WHERE id = ?"
+        await self.execute(query, tuple(values))
 
     # --- Seed Objectives ---
     async def seed_objectives_if_empty(self) -> None:

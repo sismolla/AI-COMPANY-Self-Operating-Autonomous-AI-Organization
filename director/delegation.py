@@ -20,10 +20,34 @@ class DelegationManager:
         task_description: str,
         priority: str = "medium",
         inputs: Optional[Dict[str, Any]] = None,
-        objective_id: Optional[str] = None
+        objective_id: Optional[str] = None,
+        parent_task_id: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Validate and route an inter-agent task delegation."""
+        """Validate and route an inter-agent task delegation with recursion guard."""
         logger.info(f"Delegation request: {from_agent} -> {to_agent} ('{task_title}')")
+
+        # Cycle / self-delegation check
+        if from_agent.lower() == to_agent.lower():
+            return {
+                "success": False,
+                "error": f"Agent '{from_agent}' cannot delegate task to itself."
+            }
+
+        # Check parent task delegation depth
+        parent_depth = 0
+        if parent_task_id:
+            parent_task = await db.get_task(parent_task_id)
+            if parent_task:
+                parent_depth = parent_task.get("delegation_depth", 0)
+
+        current_depth = parent_depth + 1
+        MAX_DELEGATION_DEPTH = 2
+        if current_depth > MAX_DELEGATION_DEPTH:
+            logger.warning(f"Delegation rejected: Depth {current_depth} exceeds limit {MAX_DELEGATION_DEPTH}.")
+            return {
+                "success": False,
+                "error": f"Delegation depth limit reached ({current_depth} > {MAX_DELEGATION_DEPTH}). Runaway loop prevented."
+            }
 
         # Determine permission level required for target action
         action_level = 2 if to_agent in ("engineering", "marketing", "operations") else 1
@@ -43,7 +67,9 @@ class DelegationManager:
             priority=priority,
             permission_level=action_level,
             objective_id=objective_id,
-            inputs=inputs or {}
+            inputs=inputs or {},
+            parent_task_id=parent_task_id,
+            delegation_depth=current_depth
         )
 
         await db.log_audit(
@@ -52,14 +78,16 @@ class DelegationManager:
             details={
                 "to_agent": to_agent,
                 "task_id": task_record["id"],
-                "task_title": task_title
+                "task_title": task_title,
+                "delegation_depth": current_depth
             }
         )
 
         return {
             "success": True,
             "task_id": task_record["id"],
-            "delegated_to": to_agent
+            "delegated_to": to_agent,
+            "delegation_depth": current_depth
         }
 
 

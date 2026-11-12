@@ -14,6 +14,9 @@ from tool_factory.registry import tool_registry
 from director.planner import strategic_planner
 from director.performance import performance_director
 from director.delegation import delegation_manager
+from director.cognitive_engine import cognitive_engine
+from director.opportunity_engine import opportunity_engine
+from integrations.social_media import social_media
 
 # Import specialized agents
 from agents.research.agent import ResearchAgent
@@ -65,6 +68,9 @@ class AICEO:
         await tool_registry.seed_built_in_tools()
         await scheduler.seed_default_schedules()
 
+        # 4. Recover any orphaned in-flight tasks from prior sessions
+        await task_queue.recover_orphaned_tasks()
+
         self.is_initialized = True
         logger.info("AI Enterprise successfully initialized and operational.")
 
@@ -77,8 +83,39 @@ class AICEO:
         start_time = datetime.utcnow()
         logger.info(f"--- Starting Autonomous Executive Cycle [{cycle_id}] ---")
 
+        # Step 0: Recover any stuck/orphaned tasks
+        await task_queue.recover_orphaned_tasks()
+
         # Step 1: Check persistent scheduler for due recurring tasks
         scheduled_tasks_triggered = await scheduler.check_and_trigger()
+
+        # Step 1.5: Opportunity Detection & Autonomous Deliberation
+        deliberation_summary = None
+        try:
+            opportunities = await opportunity_engine.detect_opportunities()
+            high_opps = [o for o in opportunities if o.get("priority") == "high"]
+            if high_opps:
+                top_opp = high_opps[0]
+                pending_mktg = await db.fetch_all("SELECT id FROM tasks WHERE owner_agent = 'marketing' AND status IN ('pending', 'running')")
+                if not pending_mktg:
+                    decision = await cognitive_engine.deliberate_initiative(
+                        topic=top_opp.get("topic", "Healthcare supply verification"),
+                        channel_preference=top_opp.get("platform")
+                    )
+                    deliberation_summary = {
+                        "debate_id": decision.get("id"),
+                        "verdict": decision.get("verdict"),
+                        "channel": decision.get("selected_channel")
+                    }
+                    if decision.get("verdict") in ("APPROVED", "REVISE_WITH_CONDITIONS"):
+                        await social_media.stage_post_async(
+                            platform=decision.get("selected_channel", "telegram_group"),
+                            content=decision.get("final_action_plan") or decision.get("winning_strategy", ""),
+                            author_agent="marketing",
+                            metadata={"debate_id": decision.get("id"), "verdict": decision.get("verdict")}
+                        )
+        except Exception as e:
+            logger.warning(f"Opportunity detection / deliberation tick error: {e}")
 
         # Step 2: Check active strategic objectives and break down tasks if needed
         objectives = await db.get_objectives(status="active")
@@ -124,23 +161,37 @@ class AICEO:
                     await db.update_task(appr["task_id"], status="pending")
                 approved_by_director += 1
 
-        # Step 4: Dispatch pending tasks to agents
-        dispatched_task_ids = await task_queue.dispatch_next_batch(batch_size=6)
-
-        # Wait briefly for synchronous steps to settle
-        if dispatched_task_ids:
-            await asyncio.sleep(0.5)
+        # Step 4: Dispatch pending tasks to agents and await completion
+        dispatched_task_ids = await task_queue.dispatch_next_batch(batch_size=6, wait_for_completion=True)
 
         # Step 5: Evaluate organizational performance & update objectives
         eval_result = await performance_director.evaluate_organization()
         
-        # Update progress for active objectives based on task completions
+        # Update progress for active objectives based on task completions and time horizons
         for obj in objectives:
             tasks = await db.fetch_all("SELECT status FROM tasks WHERE objective_id = ?", (obj["id"],))
             if tasks:
                 completed = sum(1 for t in tasks if t["status"] == "completed")
-                progress = int((completed / len(tasks)) * 100)
-                new_status = "completed" if progress >= 100 else "active"
+                setup_progress = int((completed / len(tasks)) * 100)
+                
+                title_lower = obj.get("title", "").lower()
+                is_multi_day = "90-day" in title_lower or "30-day" in title_lower or "ongoing" in title_lower
+                
+                if is_multi_day:
+                    try:
+                        created_dt = datetime.fromisoformat(obj.get("created_at", datetime.utcnow().isoformat()))
+                        days_elapsed = max(1, (datetime.utcnow() - created_dt).days + 1)
+                    except Exception:
+                        days_elapsed = 1
+                    total_days = 90 if "90-day" in title_lower else 30
+                    time_progress = min(99, int((days_elapsed / total_days) * 100))
+                    # Setup accounts for 40%, real-time calendar execution accounts for 60%
+                    progress = int(setup_progress * 0.4 + time_progress * 0.6)
+                    new_status = "active" if days_elapsed < total_days else "completed"
+                else:
+                    progress = setup_progress
+                    new_status = "completed" if progress >= 100 else "active"
+
                 await db.update_objective_progress(obj["id"], progress, new_status)
 
         cycle_duration = round((datetime.utcnow() - start_time).total_seconds(), 2)
@@ -208,11 +259,37 @@ class AICEO:
             )
             created_tasks.append(t["id"])
 
+        # Immediately dispatch this objective's subtasks so agents begin execution right away
+        if created_tasks:
+            await task_queue.dispatch_next_batch(batch_size=len(created_tasks), wait_for_completion=True)
+
         return {
             "objective": obj_record,
             "subtasks_created": len(created_tasks),
             "task_ids": created_tasks
         }
+
+    async def run_cognitive_deliberation(
+        self,
+        topic: str,
+        channel_preference: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Trigger an on-demand cognitive debate between Strategist, Challenger, and Judge."""
+        if not self.is_initialized:
+            await self.initialize()
+
+        decision = await cognitive_engine.deliberate_initiative(
+            topic=topic,
+            channel_preference=channel_preference
+        )
+        if decision.get("verdict") in ("APPROVED", "REVISE_WITH_CONDITIONS"):
+            await social_media.stage_post_async(
+                platform=decision.get("selected_channel", "linkedin"),
+                content=decision.get("final_action_plan") or decision.get("winning_strategy", ""),
+                author_agent="marketing",
+                metadata={"debate_id": decision.get("id"), "verdict": decision.get("verdict")}
+            )
+        return decision
 
     async def run_autonomous_loop(self) -> None:
         """Continuous background autonomous operational loop."""

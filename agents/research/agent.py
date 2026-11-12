@@ -1,5 +1,6 @@
 """Specialized Research & Market Intelligence Autonomous Agent."""
 
+import json
 import logging
 from typing import Dict, Any
 from agents.base import BaseAgent
@@ -34,10 +35,12 @@ class ResearchAgent(BaseAgent):
 
         # Save markdown dossier into persistent agent memory (Level 1 compliant)
         dossier_key = f"research_{task.get('id', 'dossier')}"
+        artifacts_val = result.get('artifacts', {})
+        insights_str = json.dumps(artifacts_val, indent=2) if isinstance(artifacts_val, (dict, list)) else str(artifacts_val)
         dossier_content = (
             f"# Intelligence Dossier: {topic}\n\n"
             f"## Summary\n{result.get('summary', '')}\n\n"
-            f"## Details\n{result.get('artifacts', '')}"
+            f"## Key Strategic Insights\n{insights_str}\n"
         )
         await memory_store.save(
             agent_name=self.name,

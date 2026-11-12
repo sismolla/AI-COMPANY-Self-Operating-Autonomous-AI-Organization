@@ -44,11 +44,17 @@ class EngineeringAgent(BaseAgent):
         
         # Write any generated code to workspace
         artifacts = result.get("artifacts")
-        if isinstance(artifacts, dict) and "code" in artifacts:
+        code = (artifacts.get("code") if isinstance(artifacts, dict) else None) or result.get("code")
+        test_code = (artifacts.get("test_code") if isinstance(artifacts, dict) else None) or result.get("test_code")
+        
+        if code:
             try:
-                fn = f"script_{task.get('id', 'tool')}.py"
-                self.write_workspace_file(fn, artifacts["code"])
+                fn = f"tool_{task.get('id', 'eng')}.py"
+                self.write_workspace_file(fn, code)
                 result["saved_script"] = fn
+                result["saved_file"] = fn
+                if test_code:
+                    self.write_workspace_file(f"test_{fn}", test_code)
             except Exception as e:
                 logger.warning(f"Could not save script file: {e}")
 

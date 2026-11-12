@@ -202,6 +202,61 @@ class ToolRegistry:
                 ),
                 "author_agent": "engineering",
                 "permission_level": 1
+            },
+            {
+                "name": "telegram_broadcaster",
+                "description": "Publishes broadcasts to Telegram channels and sends discussion messages to Telegram groups.",
+                "category": "marketing",
+                "code": (
+                    "def format_telegram_payload(channel_or_group: str, text: str, parse_mode: str = 'HTML') -> dict:\n"
+                    "    return {\n"
+                    "        'target': channel_or_group,\n"
+                    "        'text': text.strip(),\n"
+                    "        'parse_mode': parse_mode,\n"
+                    "        'status': 'ready_to_dispatch'\n"
+                    "    }\n"
+                ),
+                "test_code": (
+                    "from tool import format_telegram_payload\n"
+                    "res = format_telegram_payload('@channel', 'Hello Healthcare Network')\n"
+                    "assert res['target'] == '@channel' and 'Hello' in res['text']\n"
+                ),
+                "author_agent": "engineering",
+                "permission_level": 2
+            },
+            {
+                "name": "linkedin_publisher",
+                "description": "Formats professional thought-leadership posts and multi-channel articles for LinkedIn.",
+                "category": "marketing",
+                "code": (
+                    "def format_linkedin_post(text: str, hashtags: list = None, link_url: str = None) -> dict:\n"
+                    "    tags = ' '.join([f'#{h.replace(\"#\", \"\")}' for h in (hashtags or [])])\n"
+                    "    body = f'{text.strip()}\\n\\n{tags}'.strip() if tags else text.strip()\n"
+                    "    return {'body': body, 'link_url': link_url, 'visibility': 'PUBLIC'}\n"
+                ),
+                "test_code": (
+                    "from tool import format_linkedin_post\n"
+                    "res = format_linkedin_post('Supply chain insight', ['Healthcare', 'Pharma'])\n"
+                    "assert '#Healthcare' in res['body']\n"
+                ),
+                "author_agent": "engineering",
+                "permission_level": 2
+            },
+            {
+                "name": "facebook_publisher",
+                "description": "Prepares and structures Page feed updates and announcements for Meta Graph API.",
+                "category": "marketing",
+                "code": (
+                    "def format_facebook_post(message: str, call_to_action_url: str = None) -> dict:\n"
+                    "    return {'message': message.strip(), 'link': call_to_action_url, 'published': True}\n"
+                ),
+                "test_code": (
+                    "from tool import format_facebook_post\n"
+                    "res = format_facebook_post('Community Announcement', 'https://pharmagebeya.com')\n"
+                    "assert res['published'] is True and res['link'] is not None\n"
+                ),
+                "author_agent": "engineering",
+                "permission_level": 2
             }
         ]
 

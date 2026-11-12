@@ -44,6 +44,7 @@ class MarketingAgent(BaseAgent):
         try:
             self.write_workspace_file(plan_filename, plan_content)
             result["saved_plan"] = plan_filename
+            result["saved_file"] = plan_filename
         except Exception as e:
             logger.warning(f"Could not save campaign plan: {e}")
 

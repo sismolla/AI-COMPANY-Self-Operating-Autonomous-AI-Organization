@@ -103,6 +103,5 @@ Return JSON in this format:
             "test_report": test_report.dict()
         }
 
-
-# Global tool builder singleton
+0# Global tool builder singleton
 tool_builder = ToolBuilder()

@@ -153,3 +153,76 @@ async def test_dashboard_api_routes():
         resp = await client.get("/api/workspace/marketing/file?path=../../config/settings.py")
         assert resp.status_code == 404
 
+        # 18. Test GET /api/pipeline
+        resp = await client.get("/api/pipeline")
+        assert resp.status_code == 200
+        pipeline = resp.json()
+        assert "now" in pipeline
+        assert "next" in pipeline
+        assert "later" in pipeline
+        assert "counts" in pipeline
+        assert isinstance(pipeline["later"], list)
+        assert len(pipeline["later"]) >= 1
+
+        # 19. Test GET /api/schedules and POST /api/schedules/{id}/trigger
+        resp = await client.get("/api/schedules")
+        assert resp.status_code == 200
+        schedules = resp.json()
+        assert len(schedules) >= 1
+        first_sched_id = schedules[0]["id"]
+        resp_trig = await client.post(f"/api/schedules/{first_sched_id}/trigger")
+        assert resp_trig.status_code == 200
+        assert resp_trig.json()["success"] is True
+
+        # 20. Test fallback for virtual artifact (e.g. path=description or path=code)
+        resp_virt = await client.get("/api/workspace/engineering/file?path=description")
+        assert resp_virt.status_code in (200, 404)
+        if resp_virt.status_code == 200:
+            assert "content" in resp_virt.json()
+
+        # 21. Test GET /api/integrations/status
+        resp_status = await client.get("/api/integrations/status")
+        assert resp_status.status_code == 200
+        int_status = resp_status.json()
+        assert "telegram" in int_status
+        assert "linkedin" in int_status
+        assert "facebook" in int_status
+
+        # 22. Test POST /api/integrations/test
+        resp_tg_test = await client.post("/api/integrations/test", json={
+            "platform": "telegram_channel",
+            "message": "Test message to Telegram channel from test suite"
+        })
+        assert resp_tg_test.status_code == 200
+        assert resp_tg_test.json()["result"]["success"] is True
+
+        resp_li_test = await client.post("/api/integrations/test", json={
+            "platform": "linkedin",
+            "message": "Test share to LinkedIn from test suite"
+        })
+        assert resp_li_test.status_code == 200
+        assert resp_li_test.json()["result"]["success"] is True
+
+        # 23. Test GET /api/cognitive/decisions
+        resp_dec = await client.get("/api/cognitive/decisions")
+        assert resp_dec.status_code == 200
+        assert isinstance(resp_dec.json(), list)
+
+        # 24. Test GET /api/cognitive/opportunities
+        resp_opp = await client.get("/api/cognitive/opportunities")
+        assert resp_opp.status_code == 200
+        assert isinstance(resp_opp.json(), list)
+        assert len(resp_opp.json()) >= 1
+
+        # 25. Test POST /api/cognitive/deliberate
+        resp_delib = await client.post("/api/cognitive/deliberate", json={
+            "topic": "Cold Chain Medicine Tracking Campaign",
+            "channel": "linkedin"
+        })
+        assert resp_delib.status_code == 200
+        delib_res = resp_delib.json()
+        assert "id" in delib_res
+        assert "verdict" in delib_res
+        assert "winning_strategy" in delib_res
+
+

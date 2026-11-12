@@ -39,6 +39,8 @@ class OperationsAgent(BaseAgent):
         try:
             self.write_workspace_file(log_fn, log_content)
             result["saved_ops_log"] = log_fn
+            result["saved_file"] = log_fn
+            result["saved_report"] = log_fn
         except Exception as e:
             logger.warning(f"Could not save ops log: {e}")
 

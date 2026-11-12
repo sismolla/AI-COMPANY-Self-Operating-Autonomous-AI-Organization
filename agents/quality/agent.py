@@ -48,6 +48,8 @@ class QualitySecurityAgent(BaseAgent):
         try:
             self.write_workspace_file(audit_fn, audit_md)
             result["saved_audit_report"] = audit_fn
+            result["saved_audit"] = audit_fn
+            result["saved_file"] = audit_fn
         except Exception as e:
             logger.warning(f"Could not save audit report: {e}")
 

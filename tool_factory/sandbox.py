@@ -156,7 +156,17 @@ class ToolSandbox:
 
         except asyncio.TimeoutError:
             try:
-                proc.kill()
+                # Windows Process Tree Kill
+                if sys.platform.startswith("win"):
+                    import subprocess
+                    subprocess.run(
+                        ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        check=False
+                    )
+                else:
+                    proc.kill()
             except Exception:
                 pass
             return {
