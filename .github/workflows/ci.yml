@@ -40,3 +40,4 @@ jobs:
         ENV: development
       run: |
         pytest tests/ -v --tb=short
+
